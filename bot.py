@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Telegram Bot for Hermes Agent with PC connection check
-Single file bot with file exchange support and PC monitoring
+Simple Telegram Bot using requests
+Single file bot with HTTP requests
 Author: Bot_Proxy from Hermes Agent
 Date: 18.10.2026
 """
@@ -11,20 +11,17 @@ import sys
 import json
 import logging
 import time
-import requests
 from datetime import datetime
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Загрузка переменных окружения
-load_dotenv()
+# Создание рабочих директорий
+WORKING_DIR = './telegram-working'
+Path(WORKING_DIR).mkdir(parents=True, exist_ok=True)
 
-try:
-    import telebot
-except ImportError:
-    print("Installing required packages...")
-    os.system("pip install pyTelegramBotAPI python-dotenv requests")
-    import telebot
+# Конфигурация
+BOT_TOKEN = '8737491152:AAFL_BSsUG1Q2nDLPfSu0-KgTPX0cXyW1EQ'
+USER_ID = 128382766
+API_URL = f'https://api.telegram.org/bot{BOT_TOKEN}'
 
 # Настройка логирования
 logging.basicConfig(
@@ -37,221 +34,113 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Загрузка конфигурации
-BOT_TOKEN = os.getenv('BOT_TOKEN', '8737491152:AAFL_BSsUG1Q2nDLPfSu0-KgTPX0cXyW1EQ')
-USER_ID = int(os.getenv('USER_ID', '128382766'))
-WORKING_DIR = os.getenv('WORKING_DIR', './telegram-working')
-PC_CONNECTION_URL = os.getenv('PC_CONNECTION_URL', 'http://localhost:8080')  # URL для связи с Hermes Agent
-
-# Создание рабочих директорий
-Path(WORKING_DIR).mkdir(parents=True, exist_ok=True)
-
-class TelegramBot:
+class SimpleTelegramBot:
     def __init__(self):
-        self.bot = telebot.TeleBot(BOT_TOKEN, parse_mode='HTML')
         self.setup_handlers()
-        self.pc_connected = False
-        self.last_pc_check = None
-        logger.info("Telegram Bot initialized")
+        logger.info("Simple Telegram Bot initialized")
+    
+    def make_api_request(self, method, params=None):
+        """Отправка запросов к Telegram API"""
+        try:
+            import requests
+            url = f"{API_URL}/{method}"
+            response = requests.post(url, json=params, timeout=10)
+            return response.json()
+        except Exception as e:
+            logger.error(f"API request failed: {e}")
+            return None
     
     def setup_handlers(self):
         """Настройка обработчиков сообщений"""
         
-        @self.bot.message_handler(commands=['start'])
-        def handle_start(message):
-            if message.from_id == USER_ID:
-                pc_status = "✅ Подключен" if self.pc_connected else "❌ Не подключен"
-                self.bot.reply_to(message, 
-                    f"👋 Привет, {message.from_user.first_name}!\n\n"
-                    f"🚀 <b>HERMES AGENT TELEGRAM BOT</b>\n\n"
-                    f"✅ Работает на сервере\n"
-                    f"📡 Готов принимать сообщения\n"
-                    f"🖥️ Hermes Agent: {pc_status}\n"
-                    f"🔄 Мониторинг сети активен\n\n"
-                    f"📝 Напишите любое сообщение для теста!\n\n"
-                    f"⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}")
-                logger.info(f"Start command from user {USER_ID}")
-            else:
-                self.bot.reply_to(message, "❌ Доступ запрещен")
-        
-        @self.bot.message_handler(commands=['test'])
-        def handle_test(message):
-            if message.from_id == USER_ID:
-                pc_status = "✅ Подключен" if self.pc_connected else "❌ Не подключен"
-                test_text = (
-                    f"🧪 <b>ТЕСТОВОЕ СООБЩЕНИЕ</b>\n\n"
-                    f"✅ Бот работает на сервере!\n"
-                    f"🖥️ Hermes Agent: {pc_status}\n"
-                    f"⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
-                )
-                
-                if self.pc_connected:
-                    # Проверяем связь с Hermes Agent
-                    try:
-                        response = requests.get(f"{PC_CONNECTION_URL}/health", timeout=5)
-                        if response.status_code == 200:
-                            test_text += f"\n\n🎉 Hermes Agent отвечает!"
-                        else:
-                            test_text += f"\n\n⚠️ Hermes Agent не отвечает (код {response.status_code})"
-                    except Exception as e:
-                        test_text += f"\n\n❌ Hermes Agent недоступен: {str(e)}"
-                
-                self.bot.reply_to(message, test_text)
-                logger.info("Test command executed")
-            else:
-                self.bot.reply_to(message, "❌ Доступ запрещен")
-        
-        @self.bot.message_handler(commands=['status'])
-        def handle_status(message):
-            if message.from_id == USER_ID:
-                pc_status = "✅ Подключен" if self.pc_connected else "❌ Не подключен"
-                last_check = self.last_pc_check.strftime('%d.%m.%Y %H:%M:%S') if self.last_pc_check else "Не проверялся"
-                
-                status_text = (
-                    f"📊 <b>СТАТУС СИСТЕМЫ</b>\n\n"
-                    f"✅ Бот: Запущен на сервере\n"
-                    f"🖥️ Hermes Agent: {pc_status}\n"
-                    f"🕐 Последняя проверка: {last_check}\n"
-                    f"📁 Рабочая директория: {WORKING_DIR}\n"
-                    f"🌐 URL связи: {PC_CONNECTION_URL}\n\n"
-                    f"🎯 Напишите сообщение для теста!"
-                )
-                self.bot.reply_to(message, status_text)
-                logger.info("Status command executed")
-            else:
-                self.bot.reply_to(message, "❌ Доступ запрещен")
-        
-        @self.bot.message_handler(commands=['help'])
-        def handle_help(message):
-            if message.from_id == USER_ID:
-                help_text = (
-                    f"ℹ️ <b>СПРАВОЧНИК КОМАНД</b>\n\n"
-                    f"/start - Приветственное сообщение\n"
-                    f"/test - Тестовое сообщение + проверка Hermes\n"
-                    f"/status - Статус системы\n"
-                    f"/help - Эта справка\n\n"
-                    f"🔧 Бот передает все сообщения в Hermes Agent через файловую систему."
-                )
-                self.bot.reply_to(message, help_text)
-                logger.info("Help command executed")
-            else:
-                self.bot.reply_to(message, "❌ Доступ запрещен")
-        
-        @self.bot.message_handler(commands=['check'])
-        def handle_check(message):
-            if message.from_id == USER_ID:
-                self.check_pc_connection()
-                pc_status = "✅ Подключен" if self.pc_connected else "❌ Не подключен"
-                check_text = (
-                    f"🔍 <b>ПРОВЕРКА СВЯЗИ С HERMES AGENT</b>\n\n"
-                    f"🖥️ Статус: {pc_status}\n"
-                    f"🕐 Время проверки: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
-                    f"🌐 URL: {PC_CONNECTION_URL}\n\n"
-                )
-                
-                if self.pc_connected:
-                    check_text += "✅ Hermes Agent доступен!\n\n🎯 Бот готов передавать сообщения!"
-                else:
-                    check_text += "❌ Hermes Agent недоступен!\n\n🔧 Проверьте:\n1. Hermes Agent запущен\n2. Сеть между сервером и ПК\n3. Firewall настройки"
-                
-                self.bot.reply_to(message, check_text)
-                logger.info("Check command executed")
-            else:
-                self.bot.reply_to(message, "❌ Доступ запрещен")
-        
-        @self.bot.message_handler(func=lambda message: True)
-        def handle_text(message):
-            """Обработка текстовых сообщений"""
-            if message.from_id != USER_ID:
-                self.bot.reply_to(message, "❌ Доступ запрещен")
-                return
+        def send_message(chat_id, text, reply_to_message_id=None):
+            """Отправка сообщения"""
+            params = {
+                'chat_id': chat_id,
+                'text': text,
+                'parse_mode': 'HTML'
+            }
+            if reply_to_message_id:
+                params['reply_to_message_id'] = reply_to_message_id
             
-            logger.info(f"Received message from user {USER_ID}: {message.text}")
-            
+            result = self.make_api_request('sendMessage', params)
+            if result and result.get('ok'):
+                logger.info(f"Message sent to {chat_id}")
+                return True
+            else:
+                logger.error(f"Failed to send message: {result}")
+                return False
+        
+        def handle_message(message_data):
+            """Обработка входящего сообщения"""
             try:
-                # Проверяем связь с Hermes Agent
-                if not self.pc_connected:
-                    self.check_pc_connection()
+                chat_id = message_data['message']['chat']['id']
+                text = message_data['message']['text']
+                message_id = message_data['message']['message_id']
+                from_user = message_data['message']['from']
                 
-                # Формируем ответ
-                pc_status = "✅ Hermes Agent готов" if self.pc_connected else "⚠️ Hermes Agent недоступен"
+                # Проверка пользователя
+                if chat_id != USER_ID:
+                    send_message(chat_id, "❌ Доступ запрещен")
+                    return
                 
-                # Отправляем подтверждение
+                logger.info(f"Received message from user {USER_ID}: {text}")
+                
+                # Отправка подтверждения
                 confirmation_text = (
                     f"✅ <b>ПОДТВЕРЖДЕНИЕ</b> ✅\n\n"
                     f"📨 Ваше сообщение получено серверным ботом!\n\n"
-                    f"Текст: <i>{message.text}</i>\n"
-                    f"🖥️ Hermes Agent: {pc_status}\n"
+                    f"Текст: <i>{text}</i>\n"
                     f"⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n\n"
+                    f"🎯 Если вы это видите - бот работает идеально!"
                 )
                 
-                if self.pc_connected:
-                    confirmation_text += f"🎯 Сообщение будет передано в Hermes Agent для обработки!"
+                if send_message(chat_id, confirmation_text, message_id):
+                    logger.info("Confirmation sent to user")
+                    
+                    # Сохраняем сообщение в файл
+                    message_info = {
+                        "id": int(time.time()),
+                        "type": "telegram_incoming_message",
+                        "action": "process_and_reply",
+                        "data": {
+                            "chat_id": USER_ID,
+                            "reply_to_message_id": message_id,
+                            "from_username": from_user.get('username', 'unknown'),
+                            "from_name": from_user.get('first_name', 'Unknown User'),
+                            "received_text": text,
+                            "received_at": datetime.now().isoformat(),
+                            "server_bot_status": "active"
+                        },
+                        "status": "received",
+                        "processed": False
+                    }
+                    
+                    # Сохраняем в рабочий каталог
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    output_file = os.path.join(WORKING_DIR, f"server_message_{timestamp}.json")
+                    
+                    with open(output_file, 'w', encoding='utf-8') as f:
+                        json.dump(message_info, f, ensure_ascii=False, indent=2)
+                    
+                    logger.info(f"Message saved to: {output_file}")
                 else:
-                    confirmation_text += f"⚠️ Hermes Agent недоступен, сообщение сохранено в файл!"
-                
-                self.bot.reply_to(message, confirmation_text)
-                logger.info("Confirmation sent to user")
-                
-                # Сохраняем сообщение в файл
-                message_data = {
-                    "id": int(time.time()),
-                    "type": "telegram_incoming_message",
-                    "action": "process_and_reply",
-                    "data": {
-                        "chat_id": USER_ID,
-                        "reply_to_message_id": message.message_id,
-                        "from_username": message.from_user.username or "unknown",
-                        "from_name": message.from_user.first_name or "Unknown User",
-                        "received_text": message.text,
-                        "received_at": datetime.now().isoformat(),
-                        "server_bot_status": "active",
-                        "pc_connected": self.pc_connected,
-                        "pc_connection_url": PC_CONNECTION_URL
-                    },
-                    "status": "received",
-                    "processed": False
-                }
-                
-                # Сохраняем в рабочий каталог
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                output_file = os.path.join(WORKING_DIR, f"server_message_{timestamp}.json")
-                
-                with open(output_file, 'w', encoding='utf-8') as f:
-                    json.dump(message_data, f, ensure_ascii=False, indent=2)
-                
-                logger.info(f"Message saved to: {output_file}")
-                
-                # Если Hermes Agent доступен, отправляем уведомление
-                if self.pc_connected:
-                    try:
-                        # Пытаемся отправить уведомление Hermes Agent
-                        response = requests.post(
-                            f"{PC_CONNECTION_URL}/telegram_message",
-                            json=message_data,
-                            timeout=10
-                        )
-                        if response.status_code == 200:
-                            logger.info("Message successfully sent to Hermes Agent")
-                        else:
-                            logger.warning(f"Hermes Agent responded with status {response.status_code}")
-                    except Exception as e:
-                        logger.error(f"Failed to send message to Hermes Agent: {e}")
-                
+                    logger.error("Failed to send confirmation")
+                    
             except Exception as e:
                 logger.error(f"Error processing message: {e}")
                 
                 # Сохраняем ошибку в файл
-                error_data = {
+                error_info = {
                     "id": int(time.time()),
                     "type": "telegram_incoming_message",
                     "action": "process_and_reply",
                     "data": {
                         "chat_id": USER_ID,
-                        "reply_to_message_id": message.message_id,
-                        "from_username": message.from_user.username or "unknown",
-                        "from_name": message.from_user.first_name or "Unknown User",
-                        "received_text": message.text,
+                        "reply_to_message_id": message_data['message']['message_id'],
+                        "from_username": message_data['message']['from'].get('username', 'unknown'),
+                        "from_name": message_data['message']['from'].get('first_name', 'Unknown User'),
+                        "received_text": message_data['message']['text'],
                         "received_at": datetime.now().isoformat(),
                         "server_bot_status": "error",
                         "error_message": str(e)
@@ -264,11 +153,11 @@ class TelegramBot:
                 error_file = os.path.join(WORKING_DIR, f"server_message_error_{timestamp}.json")
                 
                 with open(error_file, 'w', encoding='utf-8') as f:
-                    json.dump(error_data, f, ensure_ascii=False, indent=2)
+                    json.dump(error_info, f, ensure_ascii=False, indent=2)
                 
                 logger.error(f"Error saved to: {error_file}")
                 
-                # Отправляем сообщение об ошибке
+                # Отправка сообщения об ошибке
                 error_response = (
                     f"⚠️ <b>ОШИБКА ОБРАБОТКИ</b> ⚠️\n\n"
                     f"Ваше сообщение получено, но возникла ошибка:\n"
@@ -276,72 +165,145 @@ class TelegramBot:
                     f"⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
                     f"🔧 Бот работает, но требует внимания"
                 )
-                self.bot.reply_to(message, error_response)
-    
-    def check_pc_connection(self):
-        """Проверка связи с Hermes Agent на ПК"""
-        try:
-            # Проверяем доступность Hermes Agent
-            response = requests.get(f"{PC_CONNECTION_URL}/health", timeout=5)
-            if response.status_code == 200:
-                self.pc_connected = True
-                self.last_pc_check = datetime.now()
-                logger.info("Hermes Agent connection successful")
+                send_message(chat_id, error_response, message_id)
+        
+        # Команды
+        def handle_command(command, message_data):
+            """Обработка команд"""
+            chat_id = message_data['message']['chat']['id']
+            message_id = message_data['message']['message_id']
+            
+            if chat_id != USER_ID:
+                send_message(chat_id, "❌ Доступ запрещен")
+                return
+            
+            if command == '/start':
+                response_text = (
+                    f"👋 Привет, {message_data['message']['from']['first_name']}!\n\n"
+                    f"🚀 <b>HERMES AGENT TELEGRAM BOT</b>\n\n"
+                    f"✅ Работает на сервере\n"
+                    f"📡 Готов принимать сообщения\n"
+                    f"🔄 Мониторинг сети активен\n\n"
+                    f"📝 Напишите любое сообщение для теста!\n\n"
+                    f"⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
+                )
+            elif command == '/test':
+                response_text = (
+                    f"🧪 <b>ТЕСТОВОЕ СООБЩЕНИЕ</b>\n\n"
+                    f"✅ Бот работает на сервере!\n"
+                    f"⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
+                )
+            elif command == '/status':
+                response_text = (
+                    f"📊 <b>СТАТУС СИСТЕМЫ</b>\n\n"
+                    f"✅ Бот: Запущен на сервере\n"
+                    f"⏰ Время работы: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
+                    f"📁 Рабочая директория: {WORKING_DIR}\n\n"
+                    f"🎯 Напишите сообщение для теста!"
+                )
+            elif command == '/help':
+                response_text = (
+                    f"ℹ️ <b>СПРАВОЧНИК КОМАНД</b>\n\n"
+                    f"/start - Приветственное сообщение\n"
+                    f"/test - Тестовое сообщение\n"
+                    f"/status - Статус системы\n"
+                    f"/help - Эта справка\n\n"
+                    f"🔧 Бот передает все сообщения в Hermes Agent через файловую систему."
+                )
             else:
-                self.pc_connected = False
-                self.last_pc_check = datetime.now()
-                logger.warning(f"Hermes Agent connection failed with status {response.status_code}")
-        except Exception as e:
-            self.pc_connected = False
-            self.last_pc_check = datetime.now()
-            logger.error(f"Hermes Agent connection error: {e}")
+                response_text = "❌ Неизвестная команда"
+            
+            send_message(chat_id, response_text, message_id)
+        
+        # Главный обработчик
+        def update_handler(update_data):
+            """Обработка обновлений от Telegram"""
+            if 'message' in update_data:
+                message = update_data['message']
+                text = message.get('text', '')
+                
+                if text.startswith('/'):
+                    # Команда
+                    command = text.split()[0]
+                    handle_command(command, update_data)
+                else:
+                    # Обычное сообщение
+                    handle_message(update_data)
+        
+        # Сохраняем обработчик
+        self.update_handler = update_handler
+        self.send_message = send_message
     
     def send_welcome_message(self):
         """Отправка приветственного сообщения пользователю"""
         try:
-            # Проверяем связь с Hermes Agent
-            self.check_pc_connection()
-            pc_status = "✅ Подключен" if self.pc_connected else "❌ Не подключен"
-            
             welcome_text = (
                 f"🚀 <b>BOTPROXY СЕРВЕР ЗАПУЩЕН!</b> 🚀\n\n"
                 f"✅ Работает на сервере\n"
-                f"📡 Готов принимать ваши сообщения\n"
-                f"🖥️ Hermes Agent: {pc_status}\n\n"
+                f"📡 Готов принимать ваши сообщения\n\n"
                 f"👤 Пользователь: @bosdima\n"
                 f"🤖 Бот: @AiDSeek_bot\n"
                 f"⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n\n"
-                f"🎯 Отправьте любое сообщение для теста!\n"
-                f"📱 Используйте /check для проверки связи с Hermes"
+                f"🎯 Отправьте любое сообщение для тесте!"
             )
-            self.bot.send_message(USER_ID, welcome_text)
-            logger.info("Welcome message sent to user")
+            
+            result = self.make_api_request('sendMessage', {
+                'chat_id': USER_ID,
+                'text': welcome_text,
+                'parse_mode': 'HTML'
+            })
+            
+            if result and result.get('ok'):
+                logger.info("Welcome message sent to user")
+                return True
+            else:
+                logger.error(f"Failed to send welcome message: {result}")
+                return False
+                
         except Exception as e:
             logger.error(f"Error sending welcome message: {e}")
+            return False
     
     def run(self):
         """Запуск бота"""
         try:
-            logger.info("Starting Telegram Bot...")
+            logger.info("Starting Simple Telegram Bot...")
             logger.info(f"Bot Token: {BOT_TOKEN[:10]}...")
             logger.info(f"User ID: {USER_ID}")
             logger.info(f"Working Directory: {WORKING_DIR}")
-            logger.info(f"PC Connection URL: {PC_CONNECTION_URL}")
-            
-            # Проверяем связь с Hermes Agent при запуске
-            self.check_pc_connection()
             
             # Отправка приветственного сообщения
             self.send_welcome_message()
             
-            # Запуск бота
+            # Основной цикл бота
             logger.info("Bot is running... Press Ctrl+C to stop")
-            self.bot.polling(none_stop=True)
             
+            # Проверка обновлений каждые 5 секунд
+            while True:
+                try:
+                    # Получение обновлений
+                    updates = self.make_api_request('getUpdates', {
+                        'timeout': 5,
+                        'allowed_updates': ['message']
+                    })
+                    
+                    if updates and updates.get('ok'):
+                        for update in updates.get('result', []):
+                            self.update_handler(update)
+                    
+                    time.sleep(5)
+                    
+                except KeyboardInterrupt:
+                    logger.info("Bot stopped by user")
+                    break
+                except Exception as e:
+                    logger.error(f"Error in main loop: {e}")
+                    time.sleep(10)
+                    
         except Exception as e:
             logger.error(f"Fatal error: {e}")
             sys.exit(1)
 
 if __name__ == "__main__":
-    bot = TelegramBot()
+    bot = SimpleTelegramBot()
     bot.run()
