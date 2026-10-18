@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Simple Telegram Bot using requests
-Single file bot with HTTP requests
+Single file bot with HTTP requests - FIXED VERSION
 Author: Bot_Proxy from Hermes Agent
 Date: 18.10.2026
 """
@@ -44,8 +44,23 @@ class SimpleTelegramBot:
         try:
             import requests
             url = f"{API_URL}/{method}"
-            response = requests.post(url, json=params, timeout=10)
-            return response.json()
+            
+            # Добавляем заголовки
+            headers = {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            # Отправляем запрос
+            response = requests.post(url, json=params, headers=headers, timeout=15)
+            
+            # Проверяем статус ответа
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logger.error(f"API request failed with status {response.status_code}: {response.text}")
+                return None
+                
         except Exception as e:
             logger.error(f"API request failed: {e}")
             return None
@@ -244,7 +259,7 @@ class SimpleTelegramBot:
                 f"👤 Пользователь: @bosdima\n"
                 f"🤖 Бот: @AiDSeek_bot\n"
                 f"⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n\n"
-                f"🎯 Отправьте любое сообщение для тесте!"
+                f"🎯 Отправьте любое сообщение для теста!"
             )
             
             result = self.make_api_request('sendMessage', {
@@ -290,6 +305,8 @@ class SimpleTelegramBot:
                     if updates and updates.get('ok'):
                         for update in updates.get('result', []):
                             self.update_handler(update)
+                    else:
+                        logger.warning(f"Failed to get updates: {updates}")
                     
                     time.sleep(5)
                     
