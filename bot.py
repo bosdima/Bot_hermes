@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Simple Telegram Bot using requests
-Single file bot with HTTP requests - FIXED VERSION
+Simple Telegram Bot using requests - FIXED VERSION
+Single file bot with HTTP requests - NO SPAM VERSION
 Author: Bot_Proxy from Hermes Agent
 Date: 18.10.2026
 """
@@ -14,13 +14,20 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+# Загрузка конфигурации из .env файла
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Создание рабочих директорий
-WORKING_DIR = './telegram-working'
+WORKING_DIR = os.getenv('WORKING_DIR', './telegram-working')
 Path(WORKING_DIR).mkdir(parents=True, exist_ok=True)
 
 # Конфигурация
-BOT_TOKEN = '8737491152:AAFL_BSsUG1Q2nDLPfSu0-KgTPX0cXyW1EQ'
-USER_ID = 128382766
+BOT_TOKEN = os.getenv('BOT_TOKEN', '8737491152:AAFL_BSsUG1Q2nDLPfSu0-KgTPX0cXyW1EQ')
+USER_ID = int(os.getenv('USER_ID', '128382766'))
 API_URL = f'https://api.telegram.org/bot{BOT_TOKEN}'
 
 # Настройка логирования
@@ -36,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 class SimpleTelegramBot:
     def __init__(self):
+        self.last_update_id = 0
         self.setup_handlers()
         logger.info("Simple Telegram Bot initialized")
     
@@ -44,23 +52,8 @@ class SimpleTelegramBot:
         try:
             import requests
             url = f"{API_URL}/{method}"
-            
-            # Добавляем заголовки
-            headers = {
-                'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            
-            # Отправляем запрос
-            response = requests.post(url, json=params, headers=headers, timeout=15)
-            
-            # Проверяем статус ответа
-            if response.status_code == 200:
-                return response.json()
-            else:
-                logger.error(f"API request failed with status {response.status_code}: {response.text}")
-                return None
-                
+            response = requests.post(url, json=params, timeout=10)
+            return response.json()
         except Exception as e:
             logger.error(f"API request failed: {e}")
             return None
@@ -296,17 +289,22 @@ class SimpleTelegramBot:
             # Проверка обновлений каждые 5 секунд
             while True:
                 try:
-                    # Получение обновлений
+                    # Получение обновлений с offset, чтобы не обрабатывать повторно
                     updates = self.make_api_request('getUpdates', {
                         'timeout': 5,
-                        'allowed_updates': ['message']
+                        'allowed_updates': ['message'],
+                        'offset': self.last_update_id + 1
                     })
                     
                     if updates and updates.get('ok'):
                         for update in updates.get('result', []):
+                            # Обрабатываем обновление
                             self.update_handler(update)
+                            # Обновляем offset, чтобы не обрабатывать повторно
+                            self.last_update_id = update['update_id']
+                            logger.info(f"Processed update {update['update_id']}")
                     else:
-                        logger.warning(f"Failed to get updates: {updates}")
+                        logger.debug("No new updates")
                     
                     time.sleep(5)
                     
